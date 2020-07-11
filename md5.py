@@ -1,7 +1,7 @@
 # 参考: https://www.ietf.org/rfc/rfc1321.txt
 # sinianluoye 2020.07.11
 # 仅用于学习交流，严禁用于对各种网站、软件的攻击，违者责任自负
-# WARN: !!!Don't used this to attack!!!
+# WARN: !!!No Attack!!!
 
 import math
 
@@ -164,9 +164,8 @@ class MD5:
             self.deal_one_group(s[i:i + 64])
         return str(self)
 
-    def extend_length_attack(self, last_md5, length, extend_data, debug=False):
+    def extend_length_attack(self, last_md5, last_group_data, length, extend_data, debug=False):
         """
-
         :param last_md5: 上一个MD5字符串
         :param last_group_data: 上一组数据的最后一些字写
         :param length: 被用来计算MD5字节数
@@ -182,19 +181,21 @@ class MD5:
                                               last_md5[8*i+2:8*i+4],
                                               last_md5[8*i:8*i+2]), 16)) for i in range(4)]
         self.init_md_buffer(last_md5[0], last_md5[1], last_md5[2], last_md5[3])
-        t = "\x80"
+        before_extend_data = last_group_data + "\x80"
+        length_word = self.get_append_length(length=length)
+        length -= len(last_group_data)
         if length % 64 <= 56:
-            t += "\x00" * (55 - length % 64) + self.get_append_length(length=length)
+            before_extend_data += "\x00" * (56 - len(before_extend_data) - length % 64) + length_word
             length = (length // 64 + 1) * 64 + len(extend_data)
         elif length % 64 == 0:
-            t += "\x00" * 55 + self.get_append_length(length=length)
+            before_extend_data += "\x00" * (56 - len(before_extend_data)) + length_word
             length = (length // 64 + 1) * 64 + len(extend_data)
         else:
-            t += "\x00" * (55 + (64 - length % 64)) + self.get_append_length(length=length)
+            before_extend_data += "\x00" * (56 - len(before_extend_data) + (64 - length % 64)) + length_word
             length = (length // 64 + 2) * 64 + len(extend_data)
         s = extend_data + self.get_padding_bits(extend_data) + self.get_append_length(length=length)
         self.deal_one_group(s)
-        return t + extend_data, str(self)
+        return before_extend_data + extend_data, str(self)
 
     def init_md_buffer(self,
                        a,
@@ -285,6 +286,7 @@ class MD5:
 
 
 if __name__ == '__main__':
+    md5 = MD5()
     test_strs = ["",  # test len(s) = 0
                  "123",  # test len(s) < 56
                  "1234567890"*5 + "123456",  # test len(s) = 56
@@ -294,7 +296,6 @@ if __name__ == '__main__':
                  ]
     for test_str in test_strs:
         test_length = len(test_str)
-        md5 = MD5()
-        t = md5.md5(test_str)
-        ta, tb = md5.extend_length_attack(t, test_length, "hack")
-        print(md5.md5(test_str + ta), tb)
+        last_md5 = md5.md5(test_str)
+        extend_data, new_hash = md5.extend_length_attack(last_md5, test_str[-2:] if test_str else "", test_length, "hack")
+        print(md5.md5(test_str[:-2] + extend_data), new_hash)
